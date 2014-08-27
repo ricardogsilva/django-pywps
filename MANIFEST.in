@@ -1,0 +1,6 @@
+include LICENSE
+include README.rst
+recursive-include djangowps/static *
+recursive-include djangowps/templates *
+recursive-include djangowps/docs *
+recursive-include djangowps/config *
