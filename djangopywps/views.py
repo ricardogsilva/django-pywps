@@ -8,6 +8,8 @@ from django.conf import settings
 import pywps
 from pywps import Soap
 from pywps.Exceptions import WPSException, NoApplicableCode
+import mapscript
+
 
 def index(request):
     """
@@ -21,20 +23,20 @@ def index(request):
     to_return = None
     input_query = request.META["QUERY_STRING"]
     default_content_type = "application/xml"
+    content_type = default_content_type
     if request.method == pywps.METHOD_GET and input_query == "":
         error = NoApplicableCode("No query string found")
         to_return = _write_response(str(error))
-        content_type = default_content_type
     elif request.method == pywps.METHOD_GET:
         input_query = request.META["QUERY_STRING"]
     else:
         input_query = request.body
     if to_return is None:
+        wps_server = pywps.Pywps(
+            method=request.method,
+            configFiles=(settings.PYWPS_SETTINGS_FILE,)
+        )
         try:
-            wps_server = pywps.Pywps(
-                method=request.method,
-                configFiles=(settings.PYWPS_SETTINGS_FILE,)
-            )
             if wps_server.parseRequest(input_query):
                 pywps.debug(wps_server.inputs)
                 wps_response = wps_server.performRequest()
@@ -55,6 +57,14 @@ def index(request):
                 is_soap_execute=wps_server.parser.isSoapExecute
             )
             content_type = default_content_type
+        finally:
+            if hasattr(wps_server.request, "umn"):
+                print("Deleting the mapobj attribute of request.umn in "
+                      "order to prevent memory leaks...")
+                del wps_server.request.umn
+    # release mapserver memory in order to avoid leaks when
+    # running under wsgi
+    mapscript.msCleanup(1)
     return HttpResponse(to_return, content_type=content_type)
 
 def get_status_report(request, file_name):
